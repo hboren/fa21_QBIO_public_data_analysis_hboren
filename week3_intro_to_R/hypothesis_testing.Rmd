@@ -1,0 +1,111 @@
+---
+title: "Week 3: Hypothesis Testing"
+author: "David Wen"
+date: "8/9/2021"
+output: 
+  beamer_presentation:
+    colortheme: "dolphin"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(tidyverse)
+library(cowplot)
+```
+
+## What is a hypothesis?
+A *hypothesis* is a testable explanation for a phenomenon (i.e. something observable).
+
+A *statistical hypothesis* is a hypothesis that is testable on the basis of observed data.
+
+## Types of statistical hypotheses
+
+In hypothesis testing, you have two types:
+
+- the *null hypothesis*, $H_0$. 
+
+  This is the statement to be tested. Often, we are interested in seeing a difference between two populations, so generally the null hypothesis states that two populations are the same in some respect.
+- the *alternative hypothesis*, $H_1$ or $H_a$. 
+
+  This is the statement tested against the null hypothesis. Think of it as the "interesting" result, i.e. there *is* some difference between the two populations.
+  
+## The p-value
+
+The **p-value** is the probability that assuming the null hypothesis is true, you see a results at least as extreme as the alternative hypothesis.
+
+In your experiments, you should set a **p-value** cutoff (often $p < 0.05$) before analyzing your results to determine if your results are **significant** or not.
+
+## Signifiance and rejection
+
+A result is **significant** if it is below the p-value cutoff, meaning that you reject the null hypothesis and accept the alternative hypothesis.
+
+This usually means you found something interesting!
+
+## Example 1
+
+Your untrustworthy friend has a coin, and says he'll pay you one dollar for every tails he flips, but he'll take one dollar from you for every heads he flips. Naturally, he flips 16 heads and you're down 12 dollars. 
+
+\color{red} Can you accuse your friend of cheating and using an unfair coin?
+
+## Example 1
+
+Steps:
+
+1. Define your hypotheses $H_0$ and $H_1$.
+2. Test your hypotheses.
+3. Reach a conclusion.
+
+## 1. Define your hypotheses
+
+- Let $Pr(H)$ be the probability the heads is flipped.
+- The null hypothesis: the coin is fair.
+- The alternative hypothesis: the coin is biased in favor of your friend.
+
+\begin{align*}
+H_0 &: Pr(H) = 0.5 \\
+H_1 &: Pr(H) \geq 0.5
+\end{align*}
+
+Let's saw we are ok with setting the threshold at $p = 0.05$.
+
+## 2. Test your hypotheses
+
+In this case, you can just calculate the probability $p$ of such an outcome *at least as extreme* as the one we observed. To save you the math, it's $p = 0.0059$. You can visualize this in the next slide (in red).
+
+A common misconception: the p-value is **not** the probability that your hypothesis/conclusion is true.
+
+## 2. Test your hypotheses, continued
+
+```{r}
+data = dbinom(0:20, 20, 0.5)
+names(data) = 0:20
+
+barplot(data, col = ifelse(0:20 >= 16, 'red', 'grey70'), xlab = "number of heads", ylab = "probability")
+```
+
+## 3. Conclude
+
+Since the probability $p = 0.0059 < 0.05$, we can reject the null hypothesis and conclude that the coin is biased. This doesn't mean that the coin **is** biased -- it's just unlikely that it was not. We'll expand on this later when we do differential expression analysis.
+
+## Example 2
+
+Say we have the following data (presented below). How would you tell if the means are (statistically) different?
+
+```{r out.width="80%"}
+set1 = rnorm(100, mean = 6, sd = 2)
+set2 = rnorm(100, mean = 10, sd = 5)
+
+data = data.frame(nums = c(set1, set2), set = c(rep('set1', 100), rep('set2', 100)))
+
+ggplot(data, aes(y = nums, x = set, fill = set)) + 
+  geom_violin(draw_quantiles = 0.5) + 
+  geom_jitter() + 
+  theme_cowplot()
+```
+
+## Last Remarks
+
+You will almost never test your hypotheses by calculating your probabilities directly. Instead, you will have to choose different tests that make assumptions based on the kind of the data type and how the data is distributed.
+
+**Be careful**: choosing the wrong test can give you the wrong p-values. You'll have to take a stats course to learn the difference between all of them.
+

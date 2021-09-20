@@ -1,0 +1,235 @@
+---
+title: "Intro to Wrangling R Data Frames"
+date: "08/09/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+theme_set(
+  theme_bw() +
+    theme(legend.position = "top")
+  )
+
+library(pacman)
+```
+
+\tableofcontents
+\newpage
+
+# Intro
+This is a much more hands-on activity to get you introduced to `R`. I'd recommend opening up a new `R script` file and follow along!
+
+## About the Datasets
+`mtcars` and `iris` are two data sets built into `R`, so you don't have to do anything to download them. They're very common in `R` tutorials, so that's why I'm using them.
+
+# mtcars
+`mtcars` has some data on cars from 1974 or something. It's nice to use to teach `R` because it's relatively small.
+
+## First Steps
+A good first step to analyzing any data set is to get a sense of what the data looks like. Run the following commands and see what's in it!
+
+```{r, eval=F}
+?mtcars  # metadata on the data set
+dim(mtcars)  # the dimensions
+names(mtcars)  # the column names
+rownames(mtcars)  # the row names
+summary(mtcars)  # summary statistics for each of the columns
+head(mtcars)  # look at the first 6 rows of the data set
+```
+
+These numbers are all fine and interesting, but let's answer some questions about the data set.
+
+## What Affects Miles Per Gallon?
+Miles Per Gallon (mpg) is an interesting statistics, so let's explore it first. Plotting is a very good first step to analyzing the data. Since we are just looking at one **continuous** variable, we should use a histogram to visualize the distribution. 
+
+**Exercise.** Generate the following histogram and boxplots. There's a solution using base `R` (first plot) and `ggplot2`. (I would recommend using base `R` to explore, and then making it pretty with `ggplot2` when you want to present your conclusions).
+
+```{r, echo=F, message=F}
+par(mfrow=c(1, 2))
+
+hist(mtcars$mpg, breaks = 5, main = "Distribution of mpg", xlab = "mpg", xlim = c(10, 35))
+boxplot(mtcars$mpg, main = "Distribution of mpg", ylab = "mpg")
+
+
+require("cowplot")
+p1 = ggplot(mtcars, aes(x = mpg)) + 
+  geom_histogram(bins = 10, fill = "grey30", color = "black")
+p2 = ggplot(mtcars, aes(y = mpg)) + 
+  geom_boxplot()
+
+plot_grid(p1, p2, labels = "AUTO")
+```
+
+This data looks right skewed based on the long tail in the boxplot. We can fruther see that in the density plot:
+
+```{r}
+dens = density(mtcars$mpg)
+plot(dens) + 
+  abline(v = mean(mtcars$mpg), col = "red") +  # adds red line at the mean
+  abline(v = median(mtcars$mpg), col = "blue")  # adds a blue line at the median
+```
+
+Since the mean is greater than the median, it suggests that the data is in-fact right skewed. Let's see what cars have these high miles per gallon by sorting on the `mpg` column.
+
+**Exercise.** Show the features of the top 5 most efficient vehicles and the least 5 most efficient vehicles. The desired output is shown below (the format doesn't really matter):
+
+```{r, echo=F}
+head(mtcars[order(mtcars$mpg, decreasing = T), ], 5)
+head(mtcars[order(mtcars$mpg, decreasing = F), ], 5)
+```
+
+On a glance, it looks like most the attributes play a role in affecting the miles per gallon. How can we tell what is actually associated with mpg? One solution is to plot everything against miles per gallon.
+
+**Exercise.** Create the following plots using a `for` loop (again, the aesthetics don't really matter when you're exploring the data -- just make sure all the information is there. There's two versions just for your edification):
+
+```{r, eval=F}
+par(mfrow = c(3, 4))  # this sets up a 3 x 4 environment for plotting
+
+# for loop here. what do you need to loop over?
+# put your plot function here
+
+
+```
+
+
+```{r, echo=F}
+par(mfrow = c(3, 4))
+
+for (i in 2:11){
+  plot(mtcars[, i], mtcars$mpg, xlab = names(mtcars)[i], ylab = 'mpg', pch = 16)
+}
+```
+
+```{r, echo=F}
+mpg_plot = mtcars %>%
+  gather(value = "value", key = "variable", -mpg) %>%
+  ggplot(aes(x = value, y = mpg)) +
+    geom_point() + 
+    facet_wrap(~variable, scales = "free") + 
+    scale_color_viridis_d()
+
+mpg_plot
+```
+
+So on a visual inspection, it looks like all these variables have at least a little relation to miles per gallon (note that some of these are actually categorical variables, which makes the scatter plots look a little wonky). With a bigger data set, you can't just simply plot variables like this, however, since that's just way too many plots. What you *can* do is look at the correlation coefficients, which tells you how strongly a change in one variable causes a change in other. Remember that a positive correlation means that an increase in one variable indicates an increase in the other, and a larger magnitude of the correlation means that the two variables are more closely linked (you can't properly calculate correlation with categorical variables, i.e. with `vs` and `am` in this data set, so let's ignore them for now). Below is how to see the correlation matrix in `R` (i.e. each pairwise correlation).
+
+```{r, message=F}
+mt_cors = cor(mtcars, method = "spearman")
+mt_cors
+
+library(rstatix)
+rstatix::cor_plot(mt_cors)
+```
+
+Let's look at the matrix and plot more closely. We're most interested in the first column of the correlation matrix, since that's where `mpg` is. By definition, miles per gallon has a perfect correlation with itself. In terms of the other attributes, it looks like `cyl`, `disp`, `hp`, and `wt` have very strong negative correlations with `mpg`. The positive correlations look more modest, though they're still somewhat strong.
+
+If you want to test how significant the correlations are, you can use the `cor.test` function.
+
+```{r}
+for(i in 1:11){
+  print(paste(names(mtcars)[i], cor.test(mtcars[, i], mtcars$mpg)$p.value))
+}
+
+## better way to loop -- it's much better cleaner
+sapply(mtcars, function(x){
+  cor.test(x, mtcars$mpg)$p.value
+})
+```
+
+All of these are statistically significant at the p = 0.05 level, which is interesting. If you have a lot of p-values, you can quickly screen for the ones that are significant. Let's say we set an arbitrary cutoff at the p = 1e-5 level ($1 \times 10^{-5}$). We can separate out these values by *boolean indexing*; that is, we can pass a vector of TRUE/FALSE values to select cells of interest (where TRUE means to include and FALSE means to exclude). We can make this array by simply comparing the `p_vals` to our desired value:
+
+```{r, warning=F}
+p_vals = sapply(mtcars, function(x){
+  cor.test(x, mtcars$mpg, method = "spearman")$p.value
+})
+
+names(p_vals)[p_vals < 1e-5]  # this will compare each value in the p_vals to 1e-5 and replace each with TRUE or FALSE
+names(p_vals)[p_vals >= 1e-5]  # the ones removed
+
+head(mtcars[, p_vals < 1e-5])
+
+```
+
+Note that `drat`, `qsec`, `am`, `gear`, and `carb` are gone. You'll apply similar techniques to look at your genomic data.
+
+
+### A Note on Correlations
+You might have noticed that we used *Spearman* correlation. *Spearman* works by comparing rank values (i.e. for each attribute, the highest value gets assigned 1, the next highest gets 2, etc.). This works better for non-linear correlations, unlike the default *Pearson* correlation, which is probably what you're more familiar with. Here's an example below:
+
+```{r, differences_in_cors}
+x_vals = 0:100 / 10  # 0 - 10 spaced by 0.1
+y_vals = 2^x_vals
+
+cor(x_vals, y_vals, method = "pearson")
+cor(x_vals, y_vals, method = "spearman")
+
+plot(x_vals, y_vals)
+```
+
+Clearly, this isn't a linear relationship (it's exponential), so the Pearson correlation is less than 1. However, the Spearman correlation is 1 because the function is strictly increasing (i.e. every increase in `x` results in an increase in `y`; the sorted `y` values never decrease). In this case, the Spearman correlation is much better -- there's obviously a relation between the data points (we made it as such), but the Pearson correlation doesn't capture it. In summary: use the Pearson correlation if you want to test if two variables are *linearly* correlated, and use Spearman correlation if you want to test if two variables are related in any manner.
+
+A bonus activity with `mpg`: let's say we're interested in building a model to predict `mpg`. There's a bunch of ways to do so (re: machine learning techniques), but let's look at a very simple method: linear regression.\footnote{regression is actually a form of machine learning by the way}. The standard "workflow" behind machine learning is to partition your data into two datasets: a training set (typically about 4/5 of the data), and a validation set (the remaining 1/5). The goal is to train on the bigger set, then use the remaining data to see how well the model predicts. We'll (probably) talk more about machine learning later on in the year. This is a generalized way to do so in `R`:
+
+```{r}
+# selects the samples to make the linear regression
+sample_inds = sample(1:nrow(mtcars), 4*nrow(mtcars)/5)
+
+# partitions into samples
+train_sample = mtcars[sample_inds, ]
+test_sample = mtcars[-sample_inds, ]
+
+# makes a linear regression model using all the variables, which is the period
+# you can examine this model with more methods
+model = lm(mpg ~ ., train_sample)
+
+# see how good the model is by making predictions on the test sample
+predicted_mpg = predict.lm(model, test_sample)
+
+# residuals are the difference between predicted values and the actual
+residuals = test_sample$mpg - predicted_mpg  
+
+# calculate the root mean square error
+rmse = sqrt(mean((residuals)^2))
+
+rmse
+```
+
+This error is kind of bad, since on average it's off by a pretty decent amount relative to the mean. It's not horrible, but ideally you'd like to do better. Feel free to play around with other methods to estimate mileage!
+
+\newpage
+
+# iris
+This is your turn! Try to complete the following exercises. If you ever get confused by the coding, look at the `R` documentation for the functions If you're still confused or don't understand the instructions, please ask me for help!
+
+1. What does the data set even describe? How many observations does it contain? What features does the data set contain?
+2. Which features are continuous variables? Which are categorical? Can you tell me the `R` data type for each column?
+3. Examine how each of the continuous variables are distributed, making a histogram for each of them (if you're feeling adventurous, slap a density plot on top of the histogram). Do you notice anything interesting in their distributions?
+4. Create a pairwise plot of each continuous variable (hint: use the `pairs` plotting command). BONUS: can you think of a way to color the plots by species as below?
+
+```{r, echo=F}
+iris %>%
+  select(-Species) %>%
+  pairs(pch = 16, lower.panel = NULL, col=c("red", "green3", "blue")[iris$Species]) 
+```
+
+5. Look up the `GGally` package. Install and load it. Use the `ggpairs` function to make the following plot (note that the `alpha`, or the transparency, was set to 0.4. Also note that it's an extension of the `ggplot2` package, so you'll have to use the `aes` syntax to set the color and transparency).
+
+```{r, echo=F, message=F, warning=F}
+p_load(GGally)
+ggpairs(iris, aes(color = Species, alpha = 0.4))
+```
+
+6. Based on the plots you just made, which species looks the most unique out of the three? Which species look the most similar?
+7. It looks like the `Sepal.Width` of *versicolor* and *virginica* look very similar. Follow the next few steps to determine if their `Sepal.Widths` are actually significant:
+  a. Create three new data frames, each containing only the data for a single species (they should be 50 rows x 5 columns).
+  b. Use the `t.test` function to compare the `Sepal.Width` of *versicolor* and *virginica*.
+8. Let's say we want to split the data set into "narrow-sepaled" plants and "wide-sepaled" plants, and you want to add a new column to the iris data set containing this data and perform some more analysis. Follow these steps:
+  a. Find the mean sepal width in the dataframe, and store it in a variable.
+  b. Create a new vector using the `ifelse` function to fill out values (comparing `Sepal.Width` to the mean value).
+  c. Create a new column in the `iris` data set (using the dollar sign) and assign the new vector to that column.
+  d. Create a boxplot plotting the `Sepal.Width` based on the new column (narrow vs. wide).
