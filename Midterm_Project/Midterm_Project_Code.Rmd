@@ -1,0 +1,110 @@
+---
+title: "QBIO Midterm Project"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+'
+
+```{r setup, include=FALSE}
+
+install.packages("BiocManager") 
+BiocManager::install(version = "3.13")
+library(BiocManager)
+BiocManager::install("TCGAbiolinks")
+
+
+library(TCGAbiolinks)
+
+
+```
+
+```{r}
+clin_query <- GDCquery(project = "TCGA-STAD", data.category = "Clinical", file.type = "xml")
+#GDCdownload( clin_query ) #Only use this line ONCE! Comment out after you have downloaded the data. 
+clinic <- GDCprepare_clinic(clin_query, clinical.info = "patient")
+names( clinic )[names(clinic)=="days_to_last_followup"] <- "days_to_last_follow_up" #This fixes an error in the name of the column
+```
+
+
+2. Install the "survival" and "survminer" packages with install.packages(). Then load in the packages with library()
+```{r}
+library(survival)
+library(survminer)
+```
+
+```{r}
+library(TCGAbiolinks)
+library(maftools)
+```
+
+
+```{r}
+maf_file <- data.table::fread("GDCDATA/TCGA.STAD.mutect.c06465a3-50e7-46f7-b2dd-7bd654ca206b.DR-10.0.somatic.maf.csv") #Replace this with appropriate file path and name
+
+#Because you cleared your environment, you need to re-read in your clinic dataframe
+clinic <- read.csv("/Users/haleyboren/Documents/coad_clinical_data.csv", row.names = 1)
+colnames( clinic )[ colnames(clinic) == "bcr_patient_barcode" ] <- "Tumor_Sample_Barcode"
+
+maf_dataframe <- read.maf(maf_file, isTCGA = TRUE, clinicalData = clinic)
+```
+
+Use an `ifelse()` statement. If `clinic$days_to_death` is not available (NA), then survival will be defined as days_to_last_follow_up. Else, survival will be the clinic$days_to_death
+```{r}
+clinic$survival_time <- ifelse( is.na(clinic$days_to_death), clinic$days_to_last_follow_up, clinic$days_to_death  )
+```
+
+4. Now we need to know which patients died and which are still alive. Use the vital_status column to determine this. If they are alive, a death event did NOT occur and they will be coded a 0. Otherwise, a death event did occur which will be coded as a 1.
+Hint: Use the `==` to check if something is EQUAL TO. 
+```{r}
+clinic$death_event <- ifelse( clinic$vital_status == "Alive", 0, 1 )
+```
+
+
+```{r}
+geneTP53_maf <- subsetMaf( maf_dataframe, genes = "TP53" )
+```
+```{r}
+all_patients <-  maf_dataframe@clinical.data$Tumor_Sample_Barcode 
+geneTP53_mutated_samples <- geneTP53_maf@clinical.data$Tumor_Sample_Barcode
+geneTP53_notMutated_samples <- all_patients[!(all_patients  %in% geneTP53_mutated_samples)]
+
+```
+
+```{r}
+clinic <- maf_dataframe@clinical.data
+str(clinic)
+
+
+#Fbool_yesM <- geneTP53_mutated_samples
+#mutTP53_patients <- clinic$Tumor_Sample_Barcode[ bool_yesM ]
+MutTP53_maf <- subsetMaf( maf_dataframe, tsb = geneTP53_mutated_samples )
+
+NoMutTP53_maf <- subsetMaf( maf_dataframe, tsb = geneTP53_notMutated_samples )
+
+#bool_old <- clinic$age_at_initial_pathologic_diagnosis >= 50
+#old_patients <- clinic$Tumor_Sample_Barcode[bool_old]
+#old_maf <- subsetMaf( maf_dataframe, tsb = old_patients)
+```
+
+```{r}
+geneTP53_mutated_samples <- geneA_maf@clinical.data$Tumor_Sample_Barcode
+```
+
+5. Complete a survival analysis by race
+```{r}
+surv_object <- Surv( time = clinic$survival_time, event = clinic$death_event  )
+race_fit <- surv_fit( surv_object ~ clinic$race_list, data = clinic )
+
+#the ggtheme and legend arguments are for formatting. Feel free to play around with the margins and legend placement
+ggsurvplot( race_fit, pval=TRUE, ggtheme = theme(plot.margin = unit( c(1,1,1,1), "cm") ), legend = "top"   )
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
