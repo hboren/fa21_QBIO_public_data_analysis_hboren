@@ -1,0 +1,111 @@
+---
+title: "QBIO Midterm Project"
+output: html_notebook
+---
+
+
+```{r setup, include=FALSE}
+
+#install.packages("BiocManager") 
+#BiocManager::install(version = "3.13")
+library(BiocManager)
+#aBiocManager::install("TCGAbiolinks")
+
+
+library(TCGAbiolinks)
+
+
+```
+
+2. Install the "survival" and "survminer" packages with install.packages(). Then load in the packages with library()
+```{r}
+library(survival)
+library(survminer)
+```
+
+```{r}
+library(TCGAbiolinks)
+library(maftools)
+```
+
+
+```{r}
+maf_file <- data.table::fread("GDCDATA/TCGA.STAD.mutect.c06465a3-50e7-46f7-b2dd-7bd654ca206b.DR-10.0.somatic.maf.csv") 
+
+clinic <- read.csv("/Users/haleyboren/Documents/coad_clinical_data.csv", row.names = 1)
+colnames( clinic )[ colnames(clinic) == "bcr_patient_barcode" ] <- "Tumor_Sample_Barcode"
+
+maf_dataframe <- read.maf(maf_file, isTCGA = TRUE, clinicalData = clinic)
+```
+
+Use an `ifelse()` statement. If `clinic$days_to_death` is not available (NA), then survival will be defined as days_to_last_follow_up. Else, survival will be the clinic$days_to_death
+```{r}
+clinic$survival_time <- ifelse( is.na(clinic$days_to_death), clinic$days_to_last_follow_up, clinic$days_to_death  )
+```
+
+4. Now we need to know which patients died and which are still alive. Use the vital_status column to determine this. If they are alive, a death event did NOT occur and they will be coded a 0. Otherwise, a death event did occur which will be coded as a 1.
+Hint: Use the `==` to check if something is EQUAL TO. 
+```{r}
+clinic$death_event <- ifelse( clinic$vital_status == "Alive", 0, 1 )
+```
+
+
+```{r}
+geneTP53_maf <- subsetMaf( maf_dataframe, genes = "TP53" )
+```
+
+```{r}
+oncoplot( maf_dataframe, top=12)
+```
+
+```{r}
+mafSurvival(maf = maf_dataframe, genes = 'TTN', time = "survival_time", Status = "death_event", groupNames = c("TTN Mutation", "No TTN Mutation"), isTCGA = FALSE)
+```
+
+```{r}
+mafSurvival(maf = maf_dataframe, genes = 'TP53', time = "survival_time", Status = "death_event", groupNames = c("TP53 Mutation", "No TP53 Mutation"), isTCGA = FALSE)
+```
+
+```{r}
+mafSurvival(maf = maf_dataframe, genes = 'MUC16', time = "survival_time", Status = "death_event", groupNames = c("MUC16 Mutation", "Noa MUC16 Mutation") , isTCGA = FALSE)
+```
+
+```{r}
+mafSurvival(maf = maf_dataframe, genes = 'LRP1B', time = "survival_time", Status = "death_event", groupNames = c("LRP1B Mutation", "No LRP1B Mutation") , isTCGA = FALSE)
+```
+
+```{r}
+mafSurvival(maf = maf_dataframe, genes = 'SYNE1', time = "survival_time", Status = "death_event", groupNames = c("SYNE1 Mutation", "No SYNE1 Mutation") , isTCGA = FALSE)
+```
+
+```{r}
+mafSurvival(maf = maf_dataframe, genes = 'ARID1A', time = "survival_time", Status = "death_event", groupNames = c("ARID1A Mutation", "No ARID1A Mutation") , isTCGA = FALSE)
+```
+
+```{r}
+mafSurvival(maf = maf_dataframe, genes = 'CSMD3', time = "survival_time", Status = "death_event", groupNames = c("CSMD3 Mutation", "No CSMD3 Mutation") , isTCGA = FALSE)
+```
+
+```{r}
+mafSurvival(maf = maf_dataframe, genes = 'FAT4', time = "survival_time", Status = "death_event", groupNames = c("FAT4 Mutation", "No FAT4 Mutation") , isTCGA = FALSE)
+```
+
+```{r}
+mafSurvival(maf = maf_dataframe, genes = 'FLG', time = "survival_time", Status = "death_event" , groupNames = c("FLG Mutation", "No FLG Mutation"), isTCGA = FALSE)
+```
+
+```{r}
+mafSurvival(maf = maf_dataframe, genes = 'PCLO', time = "survival_time", Status = "death_event" , groupNames = c("PCLO Mutation", "No PCLO Mutation"), isTCGA = FALSE)
+```
+
+```{r}
+mafSurvival(maf = maf_dataframe, genes = 'HMCN1', time = "survival_time", Status = "death_event" , groupNames = c("HMCN1 Mutation", "No HMCN1 Mutation"), isTCGA = FALSE)
+```
+
+```{r}
+mafSurvival(maf = maf_dataframe, genes = 'CSMD1', time = "survival_time", Status = "death_event" , groupNames = c("CSMD1 Mutation", "No CSMD1 Mutation"), isTCGA = FALSE)
+```
+```{r}
+prog_geneset = survGroup(maf = maf_dataframe, top = 12, geneSetSize = 1, time = "survival_time", Status = "death_event", verbose = FALSE)
+print(prog_geneset)
+```
