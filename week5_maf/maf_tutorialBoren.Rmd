@@ -1,0 +1,289 @@
+aMAF Tutorial
+
+Install maftools package. 
+```{r}
+BiocManager::install("maftools")
+```
+
+
+Remember to always load in any packages you will be using. We will be using TCGAbiolinks and maftools.
+```{r}
+library(TCGAbiolinks)
+library(maftools)
+```
+
+First, we need to get the clinical data so that we can add it to our MAF file
+```{r}
+clinic <- read.csv("/Users/haleyboren/Documents/coad_clinical_data.csv", row.names = 1)
+colnames(clinic)[ colnames(clinic) == "bcr_patient_barcode" ] <- "Tumor_Sample_Barcode"
+```
+
+
+Next, we need to download the MAF data via TCGAbiolinks. See the following link for the appropriate tumor abbreviation: https://gdc.cancer.gov/resources-tcga-users/tcga-code-tables/tcga-study-abbreviations 
+```{r}
+mutation_query <- GDCquery_Maf( tumor = "STAD", save.csv = TRUE, pipeline = "mutect2" )
+
+tumor_names = str_split(mutation_query$Tumor_Sample_Barcode, '-', n = 4, simplify = T)[, 1:3]
+fixed_tumor_barcodes = apply(tumor_names, 1, paste, collapse="-")
+mutation_query$Tumor_Sample_Barcode = fixed_tumor_barcodes
+
+
+maf_dataframe <- read.maf(mutation_query, clinicalData = clinic) 
+```
+
+Notice we have saved the MAF file as a csv, as seen in the argument save.csv = TRUE. 
+This is so we don't have to re-query for the MAF file every time we want to use it. 
+
+To demonstrate this, clear your environment by pressing the broom button on the top right panel under "Environment".
+Find the GDCdata/ folder and appropriate file name. Hint: Use getwd() if you can't find the GDCdata/ folder. The folder will be in your current directory. 
+```{r}
+maf_file <- data.table::fread("GDCDATA/TCGA.STAD.mutect.c06465a3-50e7-46f7-b2dd-7bd654ca206b.DR-10.0.somatic.maf.csv") #Replace this with appropriate file path and name
+
+#Because you cleared your environment, you need to re-read in your clinic dataframe
+clinic <- read.csv("/Users/haleyboren/Documents/coad_clinical_data.csv", row.names = 1)
+colnames( clinic )[ colnames(clinic) == "bcr_patient_barcode" ] <- "Tumor_Sample_Barcode"
+
+maf_dataframe <- read.maf(maf_file, isTCGA = TRUE, clinicalData = clinic)
+```
+
+Take a look at the maf_dataframe. Typing the name of your maf dataframe provides a summary of what it contains.
+```{r}
+maf_dataframe
+
+```
+
+
+Take a look at the maf_dataframe using str(). Can you find the @ and $ levels?
+```{r}
+str(maf_dataframe)
+
+```
+
+Take a look at the maf_dataframe@data using str(). Take a look at the maf_dataframe@clinical.data using str(). Which column is present in both? Does this make sense?
+```{r}
+
+str(maf_dataframe@data)
+
+str(maf_dataframe@clinical.data)
+```
+
+
+Now we are going to make our first figure using the oncoplot() function.
+The x-axis of the oncoplot is each individual patient. The y-axis is the n top mutated genes. The colors represent the different types of mutations. 
+```{r}
+oncoplot( young_maf, top=35
+      ) #play with the number of genes with the "top" argument
+```
+
+Choose one of the top mutated genes in your oncoplot and Google it. What is the function of this gene? Remember, at a basic level, cancer is uncontrolled cell growth. Does your gene relate to cell growth and proliferation (division)? If so, how?
+
+
+What if we want to compare two different groups of patients?
+We will use the example of young and old patients. First, we need to create two different maf_dataframes using the subsetMaf() function.
+```{r}
+clinic <- maf_dataframe@clinical.data
+str(clinic)
+
+bool_young <-  clinic$age_at_initial_pathologic_diagnosis < 50 
+young_patients <- clinic$Tumor_Sample_Barcode[ bool_young ]
+young_maf <- subsetMaf( maf_dataframe, tsb = young_patients )
+
+bool_old <- clinic$age_at_initial_pathologic_diagnosis >= 50
+old_patients <- clinic$Tumor_Sample_Barcode[bool_old]
+old_maf <- subsetMaf( maf_dataframe, tsb = old_patients)
+
+number_old <- length(old_patients)
+number_old
+#Repeat steps to create an old_maf! Can you do it in one line??
+```
+```{r}
+oncoplot(old_maf)
+```
+
+Now use coOncoplot to draw two oncoplots side by side. 
+```{r}
+coOncoplot( young_maf, old_maf, genes = 'CSDM1', m1Name = "Young", m2Name = "Old" )
+dev.off()
+```
+Notice that there may be very few young patients and so the young oncoplot is difficult to see. However, look at the percent of patients mutated (the percentages on the left and right sides). What do you notice? Are all the genes more mutated in one group? Or is there a mix? Is it what you expected?
+
+
+Next we will create a lollipop plot of a particular gene. Fill in the function with the gene you looked up earlier. Be sure to write the gene name in quotation marks. Ex. gene = "TP53"
+
+This shows where on the protein the most mutations occur. The y-axis is number of mutated samples, though the label sometimes gets cut off. 
+```{r}
+lollipopPlot( maf_dataframe, gene = "TP53" )
+```
+We can also compare two groups just as we did with the coOncoplot(). 
+```{r}
+lollipopPlot2(young_maf, old_maf, m1_name = "Young", m2_name = "Old", gene = "TP53")
+```
+
+If you are interested in other figures with this MAF file, work through this tutorial: https://www.bioconductor.org/packages/devel/bioc/vignettes/maftools/inst/doc/maftools.html#7_Visualization.
+
+The final analysis with the MAF file is co-mutations. What if we are interested in mutations that seem to occur together?
+
+First, we must understand a Fisher's Exact test. This is NOT meant to replace your statistical course, so only a base understanding is required. 
+For more information, Google, YouTube, stats textbook are all good resources. 
+Slides: http://www.biostat.jhsph.edu/~iruczins/teaching/140.652/supp21.pdf 
+
+At the base of a Fisher's Exact test is a "contingency table". 
+For the following table, you may need to make your RNotebook window wide enough so that it actually looks like a table:)
+
+                        Mutation in Gene B                No Mutation in Gene B
+
+Mutation in Gene A            10                                    40
+
+No Mutation in Gene A         20                                    25
+
+To read this table, I could say, "There are 10 samples that have both a mutation in gene A and gene B". I could also say, "10 / 50, or 20% of samples with a mutation in gene A also have a mutation in gene B".
+
+Check for understading: What is another sentence you could create with this table?
+
+The Fisher's Exact test calculates the probability that the proportions in the table will be observed. It tests how "extreme" your table is. 
+Another way to think about it is in the context of independence. The Fisher's Exact test is testing whether your variables (mutation in gene A, mutation in gene B) are independent of each other.
+
+In statistical terms, the "null hypothesis" is that two variables are INDEPENDENT.  
+
+The p-value is the probability that your null hypothesis is CORRECT. A low p-value, then, indicates that your null hypothesis is most likely not correct. In the Fisher's Exact, this low p-value means that the table is fairly "extreme" or that the variables are NOT independent. In our scenario, the low p-value indicates that the two genes appear to be related in their mutation status. 
+
+Now let's get started!
+Assume we have gene A and gene B. What are the four numbers we need for the contingency table?
+```{r}
+geneA_maf <- subsetMaf( maf_dataframe, genes = "TP53" )
+geneB_maf <- subsetMaf( maf_dataframe, genes = "KRAS")
+```
+
+Look at geneA_maf and geneB_maf. What does subsetMaf() do? 
+```{r}
+
+str(geneA_maf)
+
+#str(geneB_maf)
+```
+
+Does each sample only have one mutation in geneA? How can you determine this?
+Hint: Think about the @data section of the maf_dataframe. 
+Is the number of samples in the @data section the same as the @clinical.data section? Why?
+```{r}
+maf_dataframe@data
+
+maf_dataframe@clinical.data
+
+```
+
+
+
+As you may have guessed, this analysis will be looking at the PRESENCE of a mutation, rather than the NUMBER of mutations in a sample. 
+
+Now, we need to start filling in that contingency table. Let's start with the number of samples with a mutation in both geneA and geneB. 
+```{r}
+#First identify the samples that have a mutation in geneA. Repeat with geneB. 
+geneA_mutated_samples <- geneA_maf@clinical.data$Tumor_Sample_Barcode
+geneB_mutated_samples <- geneB_maf@clinical.data$Tumor_Sample_Barcode
+
+#Next we can count the number of geneA mutated samples. Repeat with geneB. 
+#Check for understanding: Where do these totals fit into the contingency table?
+num_geneA_mutated_samples <- length( geneA_mutated_samples )
+num_geneB_mutated_samples <- length( geneB_mutated_samples )
+```
+
+The intersect() function identifies items that are in both lists. 
+```{r}
+geneA_and_geneB_mutated_samples <- intersect( geneA_mutated_samples, geneB_mutated_samples )
+num_geneA_and_geneB_mutated_samples <- length( geneA_and_geneB_mutated_samples )
+```
+
+Now, how can we determine the other entries in the contingency table?
+HINT: Use num_geneX_mutation and num_geneA_and_geneB_mutated_samples
+```{r}
+num_geneA_mutation_No_geneB_mutation <- num_geneA_mutated_samples - num_geneA_and_geneB_mutated_samples
+num_geneB_mutation_No_geneA_mutation <- num_geneB_mutated_samples - num_geneA_and_geneB_mutated_samples
+```
+
+Brainstorm: How can we find the number of samples with neither mutation?
+
+```{r}
+total_samples <- length( maf_dataframe@clinical.data$Tumor_Sample_Barcode )
+num_neither_mutation <- total_samples - num_geneA_and_geneB_mutated_samples - num_geneA_mutation_No_geneB_mutation - num_geneB_mutation_No_geneA_mutation
+```
+
+Now we can create our contingency table!
+```{r}
+contig_table <- matrix(c(num_geneA_and_geneB_mutated_samples, num_geneB_mutation_No_geneA_mutation,num_geneA_mutation_No_geneB_mutation, num_neither_mutation), nrow=2)
+
+contig_table
+
+fe_results <- fisher.test(contig_table)
+```
+
+Examine your Fisher's Exact results. What do you notice?
+```{r}
+fe_results
+```
+
+BONUS: What if you want to look at all combinations of genes with one specific gene. For example, I am interested in the "KRAS" gene and want to know if any other genes are significantly co-mutated with the KRAS gene. 
+
+Brainstorm: How can you modify the previous code to address this question?
+
+```{r}
+geneA_maf <- subsetMaf( maf_dataframe, genes = "KRAS" )
+geneA_mutated_samples <- geneA_maf@clinical.data$Tumor_Sample_Barcode
+num_geneA_mutated_samples <- length( geneA_mutated_samples )
+
+total_samples <- length( maf_dataframe@clinical.data$Tumor_Sample_Barcode )
+
+all_genes <- unique( maf_dataframe@data$Hugo_Symbol )
+  
+results <- NULL
+
+for( gene in all_genes )
+{
+  print(gene)
+  
+  geneB_maf <- subsetMaf( maf_dataframe, genes = gene )
+  geneB_mutated_samples <- geneB_maf@clinical.data$Tumor_Sample_Barcode
+  num_geneB_mutated_samples <- length( geneB_mutated_samples )
+  
+  geneA_and_geneB_mutated_samples <- intersect( geneA_mutated_samples, geneB_mutated_samples )
+  num_geneA_and_geneB_mutated_samples <- length( geneA_and_geneB_mutated_samples )
+  
+  num_geneA_mutation_No_geneB_mutation <- num_geneA_mutated_samples - num_geneA_and_geneB_mutated_samples
+  num_geneB_mutation_No_geneA_mutation <- num_geneB_mutated_samples - num_geneA_and_geneB_mutated_samples
+  
+  num_neither_mutation <- total_samples - num_geneA_and_geneB_mutated_samples - num_geneA_mutation_No_geneB_mutation - num_geneB_mutation_No_geneA_mutation
+  
+  contig_table <- matrix(c(num_geneA_and_geneB_mutated_samples, num_geneB_mutation_No_geneA_mutation,num_geneA_mutation_No_geneB_mutation, num_neither_mutation), nrow=2)
+
+  fe_results <- fisher.test(contig_table)
+  
+  temp <- cbind( Gene = gene, pval = fe_results$p.value ) #Creates one row, two columns: Gene|p-value
+  results <- rbind( results, temp ) #Adds the temp row to a growing results table
+  
+}
+
+```
+
+
+We need to do a few formatting things for the results table
+```{r}
+results <- as.data.frame(results, stringsAsFactors = FALSE) #creates a formal dataframe
+results$pval <- as.numeric(results$pval) #stores pvalues as a "numeric" rather than as "characters"
+
+results <- results[order(results$pval),] #orders the results by pvalue, lowest to highest
+```
+
+
+A common pvalue threshold is 0.05. Add an appropriate comma to look at the top entries that fall under the 0.05 threshold. 
+```{r}
+results[ results$pval < 0.05,  ]
+```
+
+Finally, we want to save our results!
+```{r}
+write.table(results, file="/Users/haleyboren/Documents/QBIO_test_folder/fa21_QBIO_public_data_analysis_hboren/week5_maf/maf_tutorial.txt")
+
+#Fun fact: Saving as a csv (comma separated file) allows you to open the file in excel!
+write.table(results, file = "/Users/haleyboren/Documents/QBIO_test_folder/fa21_QBIO_public_data_analysis_hboren/week5_maf/maf_tutorial.csv", sep = ",", col.names = NA)
+```
+
